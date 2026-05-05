@@ -23,26 +23,25 @@ def get_latest_from_mingpao():
         if response.status_code == 200:
             html = response.text
             
-            # 方法1: 查找表格中的號碼
-            import re
-            # 明報頁面中號碼通常以 "2, 7, 8, 10, 18, 47" 形式出現
-            # 查找 "攪珠號碼" 或 "號碼" 後的數字
+            # 方法1: 查找表格中的號碼 (明報網頁版)
+            # 查找 "2, 7, 8, 10, 18, 47" 類似格式
             patterns = [
-                r'攪珠號碼[：:]\s*(\d{1,2})[,\s]+(\d{1,2})[,\s]+(\d{1,2})[,\s]+(\d{1,2})[,\s]+(\d{1,2})[,\s]+(\d{1,2})',
-                r'號碼[：:]\s*(\d{1,2})[,\s]+(\d{1,2})[,\s]+(\d{1,2})[,\s]+(\d{1,2})[,\s]+(\d{1,2})[,\s]+(\d{1,2})',
-                r'(\d{1,2})[,\s]+(\d{1,2})[,\s]+(\d{1,2})[,\s]+(\d{1,2})[,\s]+(\d{1,2})[,\s]+(\d{1,2})'
+                r'(\d{1,2})\D+(\d{1,2})\D+(\d{1,2})\D+(\d{1,2})\D+(\d{1,2})\D+(\d{1,2})',
             ]
             
             for pattern in patterns:
-                match = re.search(pattern, html)
-                if match:
-                    numbers = [int(match.group(i)) for i in range(1, 7)]
+                matches = re.findall(pattern, html)
+                if matches:
+                    # 取最後一組匹配（通常是最新一期）
+                    latest_match = matches[-1]
+                    numbers = [int(m) for m in latest_match[:6]]
+                    
                     # 查找特別號碼
-                    special_pattern = r'特別號碼[：:]\s*(\d{1,2})'
+                    special_pattern = r'特別[號碼號][碼號]?[：:]\s*(\d{1,2})'
                     special_match = re.search(special_pattern, html)
                     special = int(special_match.group(1)) if special_match else None
                     
-                    if numbers and special:
+                    if numbers and special and all(1 <= n <= 49 for n in numbers):
                         print(f"從明報解析成功: {numbers} + {special}")
                         return numbers, special
                     
@@ -54,7 +53,6 @@ def get_latest_from_mingpao():
 def manual_fallback():
     """手動備用數據 - 最新一期 (2026/05/05 第26/047期)"""
     print("使用手動備用數據")
-    # 根據明報頁面顯示的最新一期 2026/47 的數據
     return [2, 7, 8, 10, 18, 47], 4
 
 def update_google_sheet(numbers, special):
@@ -65,13 +63,17 @@ def update_google_sheet(numbers, special):
             print("❌ 找不到 GOOGLE_CREDENTIALS_JSON")
             return False
         
-        # 檢查 JSON 格式
+        # 處理 JSON 格式
+        creds_json = creds_json.strip()
         try:
             creds_dict = json.loads(creds_json)
         except json.JSONDecodeError as e:
             print(f"❌ JSON 解析失敗: {e}")
-            print(f"   Secret 內容前 200 字元: {creds_json[:200]}")
             return False
+        
+        # 處理 private_key 中的換行符
+        if 'private_key' in creds_dict:
+            creds_dict['private_key'] = creds_dict['private_key'].replace('\\n', '\n')
         
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
@@ -109,7 +111,7 @@ def update_google_sheet(numbers, special):
 def main():
     print(f"開始執行 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
-    # 從明報獲取
+    # 優先從明報獲取
     numbers, special = get_latest_from_mingpao()
     
     if numbers:
