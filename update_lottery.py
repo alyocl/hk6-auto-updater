@@ -8,11 +8,12 @@ from datetime import datetime
 
 # ===== 設定區 =====
 SHEET_KEY = "1N0DoSvoTjfQ_aFWkG3pOn_28MaquDSwnfiyTJqVA2Fw"
-DATA_URL = "https://marksixinfo.com"
+# 改用您提供的新網址
+DATA_URL = "https://lottery.hk/en/mark-six/results/"
 # =================
 
-def get_latest_from_marksixinfo():
-    """從 marksixinfo.com 獲取最新六合彩開獎結果"""
+def get_latest_lottery_result():
+    """從 lottery.hk 獲取最新六合彩開獎結果"""
     try:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -23,38 +24,30 @@ def get_latest_from_marksixinfo():
         if response.status_code == 200:
             html = response.text
             
-            # 根據 HTML 結構，查找最新一期的號碼
-            # 模式：在 "今期六合彩結果" 區域後，找 <div class="px-2.5...">數字</div>
-            pattern = r'今期六合彩結果.*?<div[^>]*class="[^"]*px-2\.5[^"]*"[^>]*>(\d{1,2})</div>.*?<div[^>]*class="[^"]*px-2\.5[^"]*"[^>]*>(\d{1,2})</div>.*?<div[^>]*class="[^"]*px-2\.5[^"]*"[^>]*>(\d{1,2})</div>.*?<div[^>]*class="[^"]*px-2\.5[^"]*"[^>]*>(\d{1,2})</div>.*?<div[^>]*class="[^"]*px-2\.5[^"]*"[^>]*>(\d{1,2})</div>.*?<div[^>]*class="[^"]*px-2\.5[^"]*"[^>]*>(\d{1,2})</div>.*?\+.*?<div[^>]*class="[^"]*px-2\.5[^"]*"[^>]*>(\d{1,2})</div>'
-            match = re.search(pattern, html, re.DOTALL)
-            
-            if match:
-                numbers = [int(match.group(i)) for i in range(1, 7)]
-                special = int(match.group(7))
+            # 解析最新一期的數據
+            # 根據您提供的 HTML 結構，最新一期在第一個 Draw Number 區塊
+            # 期數正則
+            draw_no_match = re.search(r'Draw Number[\s\S]*?(\d{2}/\d{3})', html)
+            if not draw_no_match:
+                return None, None
                 
-                if numbers and special and all(1 <= n <= 49 for n in numbers):
-                    print(f"從 marksixinfo 獲取成功: {numbers} + {special}")
-                    return numbers, special
-            else:
-                print("主要規則失敗，嘗試備用規則...")
-                # 備用規則：直接匹配所有數字，取前7個
-                all_numbers = re.findall(r'<div[^>]*class="[^"]*px-2\.5[^"]*"[^>]*>(\d{1,2})</div>', html)
-                if len(all_numbers) >= 13:
-                    # 最新一期是第一個區塊的6個正碼 + 1個特別號
-                    numbers = [int(n) for n in all_numbers[:6]]
-                    special = int(all_numbers[6])
-                    print(f"備用規則獲取成功: {numbers} + {special}")
-                    return numbers, special
+            # 號碼正則：在最新一期區塊內，查找 <li> 或直接顯示的數字
+            # 由於頁面結構清晰，我們可以直接從 HTML 中提取第一個「Balls Drawn」區塊下的數字
+            balls_section = re.search(r'Balls Drawn[\s\S]*?<ul[\s\S]*?>(.*?)</ul>', html)
+            if balls_section:
+                numbers_text = balls_section.group(1)
+                # 找出所有 <li>...</li> 中的數字
+                numbers = re.findall(r'<li[^>]*>(\d{1,2})</li>', numbers_text)
+                if numbers and len(numbers) == 7: # 6個正碼 + 1個特別號
+                    main_numbers = [int(n) for n in numbers[:6]]
+                    special = int(numbers[6])
+                    print(f"從 lottery.hk 獲取成功: {main_numbers} + {special}")
+                    return main_numbers, special
                     
     except Exception as e:
-        print(f"marksixinfo 來源失敗: {e}")
+        print(f"lottery.hk 來源失敗: {e}")
     
     return None, None
-
-def manual_fallback():
-    """手動備用數據 - 最新一期 (2026/05/05 第26/047期)"""
-    print("使用手動備用數據")
-    return [2, 7, 8, 10, 18, 47], 4
 
 def update_google_sheet(numbers, special):
     """更新 Google Sheets"""
@@ -107,18 +100,13 @@ def update_google_sheet(numbers, special):
 def main():
     print(f"開始執行 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
-    numbers, special = get_latest_from_marksixinfo()
+    numbers, special = get_latest_lottery_result()
     
     if numbers:
-        print(f"從 marksixinfo 獲取成功: {numbers} + {special}")
-    else:
-        print("marksixinfo 獲取失敗，使用手動備用數據")
-        numbers, special = manual_fallback()
-    
-    if numbers and special:
+        print(f"從 lottery.hk 獲取成功: {numbers} + {special}")
         update_google_sheet(numbers, special)
     else:
-        print("❌ 無法獲取數據")
+        print("❌ 無法獲取數據，本次更新失敗")
 
 if __name__ == "__main__":
     main()
