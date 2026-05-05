@@ -74,7 +74,14 @@ def update_google_sheet(numbers, special):
             print("❌ 找不到 GOOGLE_CREDENTIALS_JSON")
             return False
         
-        creds_dict = json.loads(creds_json)
+        # 檢查 JSON 格式
+        try:
+            creds_dict = json.loads(creds_json)
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON 解析失敗: {e}")
+            print(f"   Secret 內容前 200 字元: {creds_json[:200]}")
+            return False
+        
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
