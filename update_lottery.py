@@ -8,7 +8,6 @@ from datetime import datetime
 
 # ===== 設定區 =====
 SHEET_KEY = "1N0DoSvoTjfQ_aFWkG3pOn_28MaquDSwnfiyTJqVA2Fw"
-# 使用您提供的專屬六合彩結果網站
 DATA_URL = "https://marksixinfo.com"
 # =================
 
@@ -24,20 +23,27 @@ def get_latest_from_marksixinfo():
         if response.status_code == 200:
             html = response.text
             
-            # 根據網站內容，最新一期 (26/47) 的號碼顯示為 2, 7, 8, 10, 18, 47
-            # 匹配 "2 7 8 10 18 47" 或 "2,7,8,10,18,47" 格式
-            number_pattern = r'期數：26/47.*?(\d{1,2})\D+(\d{1,2})\D+(\d{1,2})\D+(\d{1,2})\D+(\d{1,2})\D+(\d{1,2})'
-            match = re.search(number_pattern, html, re.DOTALL)
+            # 根據 HTML 結構，查找最新一期的號碼
+            # 模式：在 "今期六合彩結果" 區域後，找 <div class="px-2.5...">數字</div>
+            pattern = r'今期六合彩結果.*?<div[^>]*class="[^"]*px-2\.5[^"]*"[^>]*>(\d{1,2})</div>.*?<div[^>]*class="[^"]*px-2\.5[^"]*"[^>]*>(\d{1,2})</div>.*?<div[^>]*class="[^"]*px-2\.5[^"]*"[^>]*>(\d{1,2})</div>.*?<div[^>]*class="[^"]*px-2\.5[^"]*"[^>]*>(\d{1,2})</div>.*?<div[^>]*class="[^"]*px-2\.5[^"]*"[^>]*>(\d{1,2})</div>.*?<div[^>]*class="[^"]*px-2\.5[^"]*"[^>]*>(\d{1,2})</div>.*?\+.*?<div[^>]*class="[^"]*px-2\.5[^"]*"[^>]*>(\d{1,2})</div>'
+            match = re.search(pattern, html, re.DOTALL)
             
             if match:
                 numbers = [int(match.group(i)) for i in range(1, 7)]
-                
-                # 查找特別號碼 (頁面中有 '+4')
-                special_match = re.search(r'\+(\d{1,2})', html)
-                special = int(special_match.group(1)) if special_match else None
+                special = int(match.group(7))
                 
                 if numbers and special and all(1 <= n <= 49 for n in numbers):
                     print(f"從 marksixinfo 獲取成功: {numbers} + {special}")
+                    return numbers, special
+            else:
+                print("主要規則失敗，嘗試備用規則...")
+                # 備用規則：直接匹配所有數字，取前7個
+                all_numbers = re.findall(r'<div[^>]*class="[^"]*px-2\.5[^"]*"[^>]*>(\d{1,2})</div>', html)
+                if len(all_numbers) >= 13:
+                    # 最新一期是第一個區塊的6個正碼 + 1個特別號
+                    numbers = [int(n) for n in all_numbers[:6]]
+                    special = int(all_numbers[6])
+                    print(f"備用規則獲取成功: {numbers} + {special}")
                     return numbers, special
                     
     except Exception as e:
@@ -76,7 +82,7 @@ def update_google_sheet(numbers, special):
         
         current_data = sheet.get_all_values()
         if len(current_data) > 1:
-            latest_row = current_data[1]
+            latest_row = current_data[1]  # 第2行是最近一期
             latest_numbers = [int(n) for n in latest_row[:6]]
             if latest_numbers == numbers:
                 print(f"數據已是最新: {numbers}，無需更新")
@@ -101,7 +107,6 @@ def update_google_sheet(numbers, special):
 def main():
     print(f"開始執行 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
-    # 優先從 marksixinfo 獲取
     numbers, special = get_latest_from_marksixinfo()
     
     if numbers:
