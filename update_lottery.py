@@ -13,7 +13,6 @@ SHEET_KEY = "1N0DoSvoTjfQ_aFWkG3pOn_28MaquDSwnfiyTJqVA2Fw"
 def get_latest_from_mingpao():
     """從明報新聞網獲取最新六合彩開獎結果"""
     try:
-        # 明報六合彩結果頁面
         url = "https://news.mingpao.com/pns/%E5%85%AD%E5%90%88%E5%BD%A9/marksix"
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -24,36 +23,28 @@ def get_latest_from_mingpao():
         if response.status_code == 200:
             html = response.text
             
-            # 從頁面中提取最新一期的攪珠號碼
-            # 明報頁面格式範例: 2, 7, 8, 10, 18, 47
-            # 使用正則表達式查找 "攪珠號碼" 後面的數字
-            pattern = r'攪珠號碼[：:]\s*(\d{1,2})[,\s]*(\d{1,2})[,\s]*(\d{1,2})[,\s]*(\d{1,2})[,\s]*(\d{1,2})[,\s]*(\d{1,2})'
-            match = re.search(pattern, html)
+            # 方法1: 查找表格中的號碼
+            import re
+            # 明報頁面中號碼通常以 "2, 7, 8, 10, 18, 47" 形式出現
+            # 查找 "攪珠號碼" 或 "號碼" 後的數字
+            patterns = [
+                r'攪珠號碼[：:]\s*(\d{1,2})[,\s]+(\d{1,2})[,\s]+(\d{1,2})[,\s]+(\d{1,2})[,\s]+(\d{1,2})[,\s]+(\d{1,2})',
+                r'號碼[：:]\s*(\d{1,2})[,\s]+(\d{1,2})[,\s]+(\d{1,2})[,\s]+(\d{1,2})[,\s]+(\d{1,2})[,\s]+(\d{1,2})',
+                r'(\d{1,2})[,\s]+(\d{1,2})[,\s]+(\d{1,2})[,\s]+(\d{1,2})[,\s]+(\d{1,2})[,\s]+(\d{1,2})'
+            ]
             
-            if not match:
-                # 備用規則：直接查找頁面中顯示的特定區塊
-                # 根據您提供的頁面內容，號碼以 "2, 7, 8, 10, 18, 47" 形式出現
-                number_span_pattern = r'<span class="[^"]*ball[^"]*">(\d{1,2})</span>'
-                number_matches = re.findall(number_span_pattern, html)
-                if len(number_matches) >= 6:
-                    numbers = [int(m) for m in number_matches[:6]]
+            for pattern in patterns:
+                match = re.search(pattern, html)
+                if match:
+                    numbers = [int(match.group(i)) for i in range(1, 7)]
                     # 查找特別號碼
-                    special_pattern = r'特別[號號][碼號][：:]\s*(\d{1,2})|<span class="[^"]*special[^"]*">(\d{1,2})</span>'
+                    special_pattern = r'特別號碼[：:]\s*(\d{1,2})'
                     special_match = re.search(special_pattern, html)
-                    if special_match:
-                        special = int(special_match.group(1) or special_match.group(2))
+                    special = int(special_match.group(1)) if special_match else None
+                    
+                    if numbers and special:
+                        print(f"從明報解析成功: {numbers} + {special}")
                         return numbers, special
-                return None, None
-            
-            numbers = [int(match.group(i)) for i in range(1, 7)]
-            
-            # 查找特別號碼
-            special_pattern = r'特別[號號][碼號][：:]\s*(\d{1,2})'
-            special_match = re.search(special_pattern, html)
-            special = int(special_match.group(1)) if special_match else None
-            
-            if numbers and special:
-                return numbers, special
                     
     except Exception as e:
         print(f"明報來源失敗: {e}")
