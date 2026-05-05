@@ -8,7 +8,6 @@ from datetime import datetime
 
 # ===== 設定區 =====
 SHEET_KEY = "1N0DoSvoTjfQ_aFWkG3pOn_28MaquDSwnfiyTJqVA2Fw"
-# 改用您提供的新網址
 DATA_URL = "https://lottery.hk/en/mark-six/results/"
 # =================
 
@@ -24,25 +23,30 @@ def get_latest_lottery_result():
         if response.status_code == 200:
             html = response.text
             
-            # 解析最新一期的數據
-            # 根據您提供的 HTML 結構，最新一期在第一個 Draw Number 區塊
-            # 期數正則
-            draw_no_match = re.search(r'Draw Number[\s\S]*?(\d{2}/\d{3})', html)
-            if not draw_no_match:
-                return None, None
-                
-            # 號碼正則：在最新一期區塊內，查找 <li> 或直接顯示的數字
-            # 由於頁面結構清晰，我們可以直接從 HTML 中提取第一個「Balls Drawn」區塊下的數字
-            balls_section = re.search(r'Balls Drawn[\s\S]*?<ul[\s\S]*?>(.*?)</ul>', html)
-            if balls_section:
-                numbers_text = balls_section.group(1)
-                # 找出所有 <li>...</li> 中的數字
-                numbers = re.findall(r'<li[^>]*>(\d{1,2})</li>', numbers_text)
-                if numbers and len(numbers) == 7: # 6個正碼 + 1個特別號
+            # 方法1：查找 "Balls Drawn" 後的 ul 列表
+            # 根據您提供的 HTML，結構是: Balls Drawn 後跟一個 <ul class="list-unstyled">
+            balls_pattern = r'Balls Drawn.*?<ul[^>]*>(.*?)</ul>'
+            balls_match = re.search(balls_pattern, html, re.DOTALL)
+            
+            if balls_match:
+                ul_content = balls_match.group(1)
+                # 提取所有號碼 (在 <li> 標籤中)
+                numbers = re.findall(r'<li[^>]*>(\d{1,2})</li>', ul_content)
+                if len(numbers) >= 7:
                     main_numbers = [int(n) for n in numbers[:6]]
                     special = int(numbers[6])
-                    print(f"從 lottery.hk 獲取成功: {main_numbers} + {special}")
+                    print(f"從 lottery.hk 獲取成功 (方法1): {main_numbers} + {special}")
                     return main_numbers, special
+            
+            # 方法2：直接從表格中提取最新一期的號碼
+            # 查找 "26/047" 之後的號碼
+            table_pattern = r'26/047.*?(\d{1,2}).*?(\d{1,2}).*?(\d{1,2}).*?(\d{1,2}).*?(\d{1,2}).*?(\d{1,2}).*?(\d{1,2})'
+            table_match = re.search(table_pattern, html, re.DOTALL)
+            if table_match:
+                main_numbers = [int(table_match.group(i)) for i in range(1, 7)]
+                special = int(table_match.group(7))
+                print(f"從 lottery.hk 獲取成功 (方法2): {main_numbers} + {special}")
+                return main_numbers, special
                     
     except Exception as e:
         print(f"lottery.hk 來源失敗: {e}")
@@ -75,7 +79,7 @@ def update_google_sheet(numbers, special):
         
         current_data = sheet.get_all_values()
         if len(current_data) > 1:
-            latest_row = current_data[1]  # 第2行是最近一期
+            latest_row = current_data[1]
             latest_numbers = [int(n) for n in latest_row[:6]]
             if latest_numbers == numbers:
                 print(f"數據已是最新: {numbers}，無需更新")
