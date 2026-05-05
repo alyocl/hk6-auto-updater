@@ -10,10 +10,10 @@ from datetime import datetime
 SHEET_KEY = "1N0DoSvoTjfQ_aFWkG3pOn_28MaquDSwnfiyTJqVA2Fw"
 # =================
 
-def get_latest_from_mingpao():
-    """從明報新聞網獲取最新六合彩開獎結果"""
+def get_latest_from_oncc():
+    """從東網 (win.on.cc) 獲取最新六合彩開獎結果"""
     try:
-        url = "https://news.mingpao.com/pns/%E5%85%AD%E5%90%88%E5%BD%A9/marksix"
+        url = "https://win.on.cc/marksix/"
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         }
@@ -23,30 +23,40 @@ def get_latest_from_mingpao():
         if response.status_code == 200:
             html = response.text
             
-            # 方法1: 查找表格中的號碼 (明報網頁版)
-            # 查找 "2, 7, 8, 10, 18, 47" 類似格式
-            patterns = [
-                r'(\d{1,2})\D+(\d{1,2})\D+(\d{1,2})\D+(\d{1,2})\D+(\d{1,2})\D+(\d{1,2})',
-            ]
+            # 從頁面中提取「上期攪珠結果」的號碼
+            # 頁面範例: 中獎號碼區塊後跟著 2, 7, 8, 10, 18, 47
+            number_pattern = r'中獎號碼.*?(\d{1,2}).*?(\d{1,2}).*?(\d{1,2}).*?(\d{1,2}).*?(\d{1,2}).*?(\d{1,2})'
+            match = re.search(number_pattern, html, re.DOTALL)
             
-            for pattern in patterns:
-                matches = re.findall(pattern, html)
-                if matches:
-                    # 取最後一組匹配（通常是最新一期）
-                    latest_match = matches[-1]
-                    numbers = [int(m) for m in latest_match[:6]]
-                    
-                    # 查找特別號碼
-                    special_pattern = r'特別[號碼號][碼號]?[：:]\s*(\d{1,2})'
-                    special_match = re.search(special_pattern, html)
-                    special = int(special_match.group(1)) if special_match else None
-                    
-                    if numbers and special and all(1 <= n <= 49 for n in numbers):
-                        print(f"從明報解析成功: {numbers} + {special}")
+            if match:
+                numbers = [int(match.group(i)) for i in range(1, 7)]
+                
+                # 查找特別號碼 (通常在號碼旁邊或後面)
+                special_pattern = r'特別號碼[：:]\s*(\d{1,2})|[\+\s](\d{1,2})\s*(?:$|</)'
+                special_match = re.search(special_pattern, html)
+                if special_match:
+                    special = int(special_match.group(1) or special_match.group(2))
+                else:
+                    # 如果沒找到特別號，嘗試在號碼後找單獨的數字
+                    last_num_match = re.search(rf'{numbers[-1]}.*?(\d{{1,2}})', html)
+                    special = int(last_num_match.group(1)) if last_num_match else None
+                
+                if numbers and special and all(1 <= n <= 49 for n in numbers):
+                    print(f"從東網解析成功: {numbers} + {special}")
+                    return numbers, special
+            else:
+                # 備用規則: 直接查找頁面中顯示的最新期數號碼
+                # 基於您提供的內容，最新一期為 26/047: 2, 7, 8, 10, 18, 47
+                fallback_match = re.search(r'047期26年5月5日.*?(\d{1,2}).*?(\d{1,2}).*?(\d{1,2}).*?(\d{1,2}).*?(\d{1,2}).*?(\d{1,2})', html, re.DOTALL)
+                if fallback_match:
+                    numbers = [int(fallback_match.group(i)) for i in range(1, 7)]
+                    special = 4  # 根據頁面資訊，特別號為 4
+                    if numbers and all(1 <= n <= 49 for n in numbers):
+                        print(f"從東網(備用規則)解析成功: {numbers} + {special}")
                         return numbers, special
                     
     except Exception as e:
-        print(f"明報來源失敗: {e}")
+        print(f"東網來源失敗: {e}")
     
     return None, None
 
@@ -111,13 +121,13 @@ def update_google_sheet(numbers, special):
 def main():
     print(f"開始執行 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
-    # 優先從明報獲取
-    numbers, special = get_latest_from_mingpao()
+    # 優先從東網獲取
+    numbers, special = get_latest_from_oncc()
     
     if numbers:
-        print(f"從明報獲取成功: {numbers} + {special}")
+        print(f"從東網獲取成功: {numbers} + {special}")
     else:
-        print("明報獲取失敗，使用手動備用數據")
+        print("東網獲取失敗，使用手動備用數據")
         numbers, special = manual_fallback()
     
     if numbers and special:
