@@ -3,7 +3,7 @@ name: Daily Lottery Update
 on:
   schedule:
     # 每晚 21：45 香港時間 (UTC+8) 執行 = 13：45 UTC
-    - cron: '45 13 * * *'
+    - cron: '3 14 * * *'      # UTC 14:03 = 香港 22:03
   workflow_dispatch:  # 保留手動觸發
 
 jobs:
