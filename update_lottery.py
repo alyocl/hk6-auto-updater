@@ -13,52 +13,47 @@ DATA_URL = "https://lottery.hk/liuhecai/jieguo/"
 # =================
 
 def get_latest_lottery_result():
-    """從 lottery.hk 獲取最新六合彩開獎結果 (期號, 正碼列表, 特別號)"""
-    url = DATA_URL
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-    }
+    """從 lottery.hk 的 HTML 直接解析最新一期"""
+    url = "https://lottery.hk/liuhecai/jieguo/"
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
 
     try:
-        response = requests.get(url, headers=headers, timeout=15)
-        response.encoding = 'utf-8'
-        # 在 response.encoding = 'utf-8' 之后，正则之前加入：
-print("=== 页面内容前2000字符 ===")
-print(response.text[:2000])
-print("========================")
-
-        if response.status_code != 200:
-            print(f"HTTP請求失敗，狀態碼: {response.status_code}")
+        resp = requests.get(url, headers=headers, timeout=15)
+        resp.encoding = 'utf-8'
+        if resp.status_code != 200:
+            print(f"HTTP 錯誤: {resp.status_code}")
             return None, None, None
 
-        html = response.text
+        html = resp.text
 
-        # 提取第一筆資料 (最新一期)
-        # 表格結構: <tr><td>26/049</td><td>日期</td><td>- 9 - 17 - 26 - 41 - 42 - 47 - 8</td></tr>
-        pattern = r'<tr>\s*<td>([^<]+)</td>\s*<td>[^<]*</td>\s*<td>([^<]+)</td>\s*</tr>'
-        match = re.search(pattern, html)
-
+        # 1. 定位第一個有效的 tbody 之後的第一個 tr（非 tshead）
+        # 用正則找出 <tbody> 後緊接著的 <tr> 內容（不包含 th）
+        match = re.search(
+            r'<tbody>.*?<tr>(?!.*tshead).*?<td>([^<]+)</td>.*?<ul class="balls">(.*?)</ul>',
+            html,
+            re.DOTALL
+        )
         if not match:
-            print("無法解析期號與號碼欄位")
+            print("無法定位最新一期表格行")
             return None, None, None
 
         issue = match.group(1).strip()          # 例如 "26/049"
-        numbers_str = match.group(2).strip()    # 例如 "- 9 - 17 - 26 - 41 - 42 - 47 - 8"
+        balls_html = match.group(2)              # <li class="-blue">9</li> ...
 
-        # 從字串中提取所有數字 (正則 \d+)
-        all_numbers = re.findall(r'\d+', numbers_str)
-        if len(all_numbers) != 7:
-            print(f"號碼數量不對，預期7個，實際{len(all_numbers)}個: {all_numbers}")
+        # 2. 從 <li> 標籤中提取所有數字（共七個）
+        numbers = re.findall(r'<li[^>]*>(\d+)</li>', balls_html)
+        if len(numbers) != 7:
+            print(f"號碼數量不對，預期 7 個，實際 {len(numbers)} 個: {numbers}")
             return None, None, None
 
-        main_numbers = [int(n) for n in all_numbers[:6]]
-        special = int(all_numbers[6])
+        main_numbers = [int(n) for n in numbers[:6]]
+        special = int(numbers[6])
 
-        print(f"從 lottery.hk 成功獲取: 期號 {issue}, 號碼 {main_numbers}, 特別號 {special}")
+        print(f"✅ 成功解析: 期號 {issue}, 號碼 {main_numbers}, 特別號 {special}")
         return issue, main_numbers, special
 
     except Exception as e:
-        print(f"擷取失敗: {e}")
+        print(f"解析失敗: {e}")
         return None, None, None
 
 def update_google_sheet(issue, numbers, special):
