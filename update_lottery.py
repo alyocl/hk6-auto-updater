@@ -22,6 +22,10 @@ def get_latest_lottery_result():
     try:
         response = requests.get(url, headers=headers, timeout=15)
         response.encoding = 'utf-8'
+        # 在 response.encoding = 'utf-8' 之后，正则之前加入：
+print("=== 页面内容前2000字符 ===")
+print(response.text[:2000])
+print("========================")
 
         if response.status_code != 200:
             print(f"HTTP請求失敗，狀態碼: {response.status_code}")
