@@ -27,3 +27,4 @@ jobs:
         env:
           GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
         run: python update_lottery.py
+# 2026-05-11 重新激活定时任务
