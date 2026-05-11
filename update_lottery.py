@@ -13,7 +13,7 @@ DATA_URL = "https://lottery.hk/liuhecai/jieguo/"
 # =================
 
 def get_latest_lottery_result():
-    """從 lottery.hk 的 HTML 直接解析最新一期（第一個非標題行）"""
+    """从 lottery.hk 获取最新一期（期号以 26/ 开头）"""
     url = "https://lottery.hk/liuhecai/jieguo/"
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
 
@@ -21,44 +21,41 @@ def get_latest_lottery_result():
         resp = requests.get(url, headers=headers, timeout=15)
         resp.encoding = 'utf-8'
         if resp.status_code != 200:
-            print(f"HTTP 錯誤: {resp.status_code}")
+            print(f"HTTP 错误: {resp.status_code}")
             return None, None, None
 
         html = resp.text
 
-        # 找到第一个 <tbody> 之后的内容，并定位第一个正常的 <tr>（不含 tshead）
-        # 方法：拆分字符串，只处理第一个 tbody
-        tbody_start = html.find('<tbody>')
-        if tbody_start == -1:
-            print("找不到 <tbody>")
-            return None, None, None
-        
-        # 从这个 tbody 开始找第一个 <tr> 但不含 tshead
-        after_tbody = html[tbody_start:]
-        # 跳过可能的 <tr class="tshead">，找到真正的数据行
-        match = re.search(r'<tr>(?!.*tshead).*?<td>([^<]+)</td>.*?<ul class="balls">(.*?)</ul>', after_tbody, re.DOTALL)
-        
+        # 匹配期号 26/XXX 并且紧跟一个 <ul class="balls"> 的 tr 行
+        # 该正则从页面开头搜索，找到第一个 <td>26/数字</td> 且后面有 <ul class="balls"> 的片段
+        match = re.search(
+            r'<td>(\d{2}/\d{3})</td>.*?<ul class="balls">(.*?)</ul>',
+            html,
+            re.DOTALL
+        )
         if not match:
-            print("无法定位最新一期表格行")
+            print("找不到任何期号与号码组合")
             return None, None, None
 
         issue = match.group(1).strip()
         balls_html = match.group(2)
 
+        # 提取数字
         numbers = re.findall(r'<li[^>]*>(\d+)</li>', balls_html)
         if len(numbers) != 7:
-            print(f"號碼數量不對，預期 7 個，實際 {len(numbers)} 個: {numbers}")
+            print(f"号码数量不对 (期号 {issue}): 预期7个，实际 {len(numbers)}")
             return None, None, None
 
         main_numbers = [int(n) for n in numbers[:6]]
         special = int(numbers[6])
 
-        print(f"✅ 成功解析: 期號 {issue}, 號碼 {main_numbers}, 特別號 {special}")
+        print(f"✅ 成功解析: 期号 {issue}, 号码 {main_numbers}, 特别号 {special}")
         return issue, main_numbers, special
 
     except Exception as e:
-        print(f"解析失敗: {e}")
+        print(f"解析失败: {e}")
         return None, None, None
+        
 def update_google_sheet(issue, numbers, special):
     try:
         creds_json = os.environ.get('GOOGLE_CREDENTIALS_JSON')
