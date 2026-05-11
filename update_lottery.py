@@ -12,48 +12,46 @@ DATA_URL = "https://lottery.hk/en/mark-six/results/"
 # =================
 
 def get_latest_lottery_result():
-    """從 lottery.hk 獲取最新六合彩開獎結果 (期號, 正碼列表, 特別號)"""
+    """從 marksixinfo.com 獲取最新六合彩開獎結果 (期號, 正碼列表, 特別號)"""
     try:
+        url = "https://marksixinfo.com"
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        response = requests.get(DATA_URL, headers=headers, timeout=15)
+        response = requests.get(url, headers=headers, timeout=15)
         response.encoding = 'utf-8'
         if response.status_code != 200:
             return None, None, None
         
         html = response.text
         
-        # 提取期號 (例如 "26/048")
-        issue_pattern = r'(\d{2}/\d{3})'
+        # 提取期號 (例如 "26/047")
+        issue_pattern = r'期數[：:]\s*(\d{2}/\d{3})'
         issue_match = re.search(issue_pattern, html)
         issue = issue_match.group(1) if issue_match else None
-        if not issue:
-            print("未找到期號")
         
-        # 方法1：查找 "Balls Drawn" 後的號碼列表
-        balls_pattern = r'Balls Drawn.*?<ul[^>]*>(.*?)</ul>'
-        balls_match = re.search(balls_pattern, html, re.DOTALL)
-        if balls_match:
-            ul_content = balls_match.group(1)
-            numbers = re.findall(r'<li[^>]*>(\d{1,2})</li>', ul_content)
-            if len(numbers) >= 7:
-                main_numbers = [int(n) for n in numbers[:6]]
-                special = int(numbers[6])
-                print(f"從 lottery.hk 獲取成功: 期號 {issue}, 號碼 {main_numbers}, 特別號 {special}")
-                return issue, main_numbers, special
-        
-        # 方法2：從表格中提取（備用）
-        table_pattern = r'26/\d{3}.*?(\d{1,2}).*?(\d{1,2}).*?(\d{1,2}).*?(\d{1,2}).*?(\d{1,2}).*?(\d{1,2}).*?(\d{1,2})'
-        table_match = re.search(table_pattern, html, re.DOTALL)
-        if table_match:
-            main_numbers = [int(table_match.group(i)) for i in range(1, 7)]
-            special = int(table_match.group(7))
-            print(f"從 lottery.hk 獲取成功 (備用): 期號 {issue}, 號碼 {main_numbers}, 特別號 {special}")
+        # 提取號碼
+        # 頁面中號碼以 "2" "7" "8" ... 方式排列在 <div class="number-ball"> 或類似標籤中
+        # 根據之前經驗，使用備用規則
+        numbers_pattern = r'<div class="number-ball">(\d{1,2})</div>'
+        numbers = re.findall(numbers_pattern, html)
+        if len(numbers) >= 7:
+            main_numbers = [int(n) for n in numbers[:6]]
+            special = int(numbers[6])
+            print(f"從 marksixinfo 獲取成功: 期號 {issue}, 號碼 {main_numbers}, 特別號 {special}")
             return issue, main_numbers, special
         
-        print("未能解析號碼")
+        # 備用：直接從文本中提取
+        text_pattern = r'今期六合彩結果.*?(\d{1,2})\s*(\d{1,2})\s*(\d{1,2})\s*(\d{1,2})\s*(\d{1,2})\s*(\d{1,2}).*?特別號[：:]\s*(\d{1,2})'
+        text_match = re.search(text_pattern, html, re.DOTALL)
+        if text_match:
+            main_numbers = [int(text_match.group(i)) for i in range(1, 7)]
+            special = int(text_match.group(7))
+            print(f"從 marksixinfo 獲取成功 (備用): 期號 {issue}, 號碼 {main_numbers}, 特別號 {special}")
+            return issue, main_numbers, special
+        
+        print("無法從 marksixinfo 解析號碼")
         return None, None, None
     except Exception as e:
-        print(f"lottery.hk 來源失敗: {e}")
+        print(f"marksixinfo 來源失敗: {e}")
         return None, None, None
 
 def update_google_sheet(issue, numbers, special):
