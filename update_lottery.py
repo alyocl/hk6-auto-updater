@@ -57,7 +57,6 @@ def get_latest_lottery_result():
         return None, None, None
 
 def update_google_sheet(issue, numbers, special):
-    """更新主表：插入新一期數據（包含期號）"""
     try:
         creds_json = os.environ.get('GOOGLE_CREDENTIALS_JSON')
         if not creds_json:
@@ -83,14 +82,13 @@ def update_google_sheet(issue, numbers, special):
         sheet.insert_row(new_row, 2)
         print(f"✅ 已插入新數據: 期號 {issue}, 號碼 {numbers}, 特別號 {special}")
         
-        # 清理超過 180 期的舊數據（保留標題 + 最近 180 期）
-        total_rows = len(all_data)
-        if total_rows > 181:  # 標題 + 180 期 = 181 行
-            rows_to_delete = total_rows - 181
-            if rows_to_delete > 0:
-                # 從第 2 行開始刪除 rows_to_delete 行（正確的 gspread 語法）
-                sheet.delete_rows(2, rows_to_delete)
-                print(f"已清理 {rows_to_delete} 筆舊數據")
+        # 清理超過 180 期的舊數據（暫時註解，避免錯誤）
+        # total_rows = len(all_data)
+        # if total_rows > 181:
+        #     rows_to_delete = total_rows - 181
+        #     if rows_to_delete > 0:
+        #         sheet.delete_rows(2, rows_to_delete)
+        #         print(f"已清理 {rows_to_delete} 筆舊數據")
         return True
     except Exception as e:
         print(f"更新 Google Sheets 失敗: {e}")
