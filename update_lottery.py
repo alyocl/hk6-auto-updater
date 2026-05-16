@@ -4,12 +4,14 @@ from oauth2client.service_account import ServiceAccountCredentials
 import json
 import re
 import os
+import time
 from datetime import datetime
 
 # ===== 設定區 =====
 SHEET_KEY = "1N0DoSvoTjfQ_aFWkG3pOn_28MaquDSwnfiyTJqVA2Fw"
-# 注意：下方 URL 已改為我們要抓取的頁面
 DATA_URL = "https://lottery.hk/liuhecai/jieguo/"
+RETRY_TIMES = 3
+RETRY_DELAY_SECONDS = 300   # 5 分钟
 # =================
 
 def get_latest_lottery_result():
@@ -27,9 +29,8 @@ def get_latest_lottery_result():
         html = resp.text
 
         # 匹配期号 26/XXX 并且紧跟一个 <ul class="balls"> 的 tr 行
-        # 该正则从页面开头搜索，找到第一个 <td>26/数字</td> 且后面有 <ul class="balls"> 的片段
         match = re.search(
-            r'<td>(\d{2}/\d{3})</td>.*?<ul class="balls">(.*?)</ul>',
+            r'<td>(\d{2}/\d{3})<\/td>.*?<ul class="balls">(.*?)</ul>',
             html,
             re.DOTALL
         )
@@ -55,7 +56,7 @@ def get_latest_lottery_result():
     except Exception as e:
         print(f"解析失败: {e}")
         return None, None, None
-        
+
 def update_google_sheet(issue, numbers, special):
     try:
         creds_json = os.environ.get('GOOGLE_CREDENTIALS_JSON')
@@ -88,11 +89,17 @@ def update_google_sheet(issue, numbers, special):
 
 def main():
     print(f"開始執行 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    issue, numbers, special = get_latest_lottery_result()
-    if issue and numbers:
-        update_google_sheet(issue, numbers, special)
-    else:
-        print("❌ 無法獲取數據，本次更新失敗")
+    for attempt in range(1, RETRY_TIMES + 1):
+        issue, numbers, special = get_latest_lottery_result()
+        if issue and numbers:
+            update_google_sheet(issue, numbers, special)
+            return
+        else:
+            if attempt < RETRY_TIMES:
+                print(f"第 {attempt} 次嘗試失敗，等待 {RETRY_DELAY_SECONDS} 秒後重試...")
+                time.sleep(RETRY_DELAY_SECONDS)
+            else:
+                print(f"❌ 已重試 {RETRY_TIMES} 次，仍無法獲取數據，本次更新失敗")
 
 if __name__ == "__main__":
     main()
